@@ -299,6 +299,24 @@ go test -v -cover -coverprofile=c.out  0.47s user 0.49s system 115% cpu 0.825 to
 
 # 4、基准测试--性能
 
+## ==基本参数说明==
+
+- -run 知道单次测试，一般用于代码逻辑验证
+- -bench=. 执行所有 Benchmark，也可以通过用例函数名来指定部分测试用例
+- -benchtime 指定测试执行时长
+- -cpuprofile 输出 cpu 的 pprof 信息文件
+- -memprofile 输出 heap 的 pprof 信息文件。
+- -blockprofile 阻塞分析，记录 goroutine 阻塞等待同步（包括定时器通道）的位置
+- -mutexprofile 互斥锁分析，报告互斥锁的竞争情况
+
+#### **benchmark 测试用例常用函数**
+
+- b.ReportAllocs() 输出单次循环使用的内存数量和对象 allocs 信息
+- b.RunParallel() 使用协程并发测试
+- b.SetBytes(n int64) 设置单次循环使用的内存数量
+
+
+
 ## 一、基准测试的格式
 
 基准测试就是在一定的工作负载之下检测程序性能的一种方法。基准测试的基本格式如下：
@@ -355,7 +373,7 @@ go test -bench=Split  2.02s user 0.65s system 106% cpu 2.505 total
 
 <font color=green size=5x>**`5007372`和`248ns/op`表示每次调用`Split`函数耗时`203ns`，这个结果是`10000000`次调用的平均值。**</font>
 
-### B、查看内存分配情况 -benchmem
+### B、==查看内存分配情况 -benchmem==
 
 ```go
 time go test -bench=Split -benchmem
@@ -504,6 +522,12 @@ func BenchmarkFibWrong2(b *testing.B) {
 	Fib(b.N)
 ```
 
+### F、使用协程并发测试
+
+```
+b.RunParallel() 使用协程并发测试
+```
+
 
 
 ## 三、重置时间 `b.ResetTimer`
@@ -522,7 +546,7 @@ func BenchmarkSplit(b *testing.B) {
 
 
 
-## 四、协程执行测试 RunParallel
+## 四、==协程执行测试 RunParallel==
 
 `func (b *B) RunParallel(body func(*PB))`会以并行的方式执行给定的基准测试。
 
@@ -583,6 +607,61 @@ go test -bench=.  4.48s user 0.69s system 15% cpu 32.325 total
 ```
 
 还可以通过在测试命令后添加`-cpu`参数如`go test -bench=. -cpu 1`来指定使用的CPU数量。
+
+# 4.1 查看内存分配情况ReportAllocs
+
+```go
+/**
+ * @Author: zhangsan
+ * @Description:
+ * @File:  split_test.go
+ * @Version: 1.0.0
+ * @Date: 2021/1/11 上午11:20
+ */
+
+package testCode
+
+// split/split_test.go
+
+import (
+	"testing"
+	"time"
+)
+
+// fib_test.go
+
+func BenchmarkSplitParallel(b *testing.B) {
+	b.SetParallelism(3) // 设置使用的CPU数
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			Split("沙河有沙又有河", "沙")
+		}
+	})
+	b.ReportAllocs()
+}
+
+func BenchmarkSplit(b *testing.B) {
+	time.Sleep(5 * time.Second) // 假设需要做一些耗时的无关操作
+	b.ResetTimer()              // 重置计时器
+	for i := 0; i > b.N; i++ {
+		Split("沙河有沙又有河", "沙")
+	}
+}
+```
+
+
+
+```go
+time go test -bench=.       
+goos: darwin
+goarch: amd64
+pkg: test/testCode
+BenchmarkSplitParallel-4        15367134                70.3 ns/op            48 B/op          1 allocs/op
+BenchmarkSplit-4                1000000000               0.000001 ns/op
+PASS
+ok      test/testCode   31.192s
+go test -bench=.  4.50s user 0.99s system 16% cpu 32.559 total
+```
 
 
 
@@ -788,7 +867,56 @@ func ExampleSplit() {
 
    
 
+# ==9、goland==生成单元测试和基准测试
 
+## 单元测试
+
+## 方式1 ：使用goland 开速生成测试用例
+
+### 1. 在想要测试的方法下面点击鼠标右键 在弹出框选择Generate （快捷键 Alt+Insert） 
+
+![img](test/7896fe289464ed0aafd5098ac1be5de7.png)
+
+### 2. 选择 Test for selecttion
+
+![img](test/2fad90f33e4f0dd12a5799a7673af173.png)
+
+
+
+### 3. goland 会在当前目录下面 生产一个 cache_test.go 的文件并且 ，自动写好测试方法 ，我们需要填充测试数据。
+
+  tests 是一个结构体数组包含了我们的测试用例， 每一个测试用例 包含 
+
+​    name（测试用例名称） ，
+
+​    args（测试方法传入的参数） ，
+
+​    wantErr （预期结果是否报错）
+
+  这个tests 结构根据测试方法不同会有一些差别，但是大体就是 xx_name 测试用例 输入参数是 args，预期输出结果是xxx这样的测试逻辑来的。
+
+```go
+func TestSplit(t *testing.T) {
+	type args struct {
+		s   string
+		sep string
+	}
+	tests := []struct {
+		name       string
+		args       args
+		wantResult []string
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if gotResult := Split(tt.args.s, tt.args.sep); !reflect.DeepEqual(gotResult, tt.wantResult) {
+				t.Errorf("Split() = %v, want %v", gotResult, tt.wantResult)
+			}
+		})
+	}
+}
+```
 
 
 
